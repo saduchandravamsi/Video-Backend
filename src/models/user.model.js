@@ -2,7 +2,6 @@ import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 
-// FIX 1: Extract Schema from mongoose
 const { Schema } = mongoose;
 
 const userSchema = new Schema(
@@ -33,7 +32,7 @@ const userSchema = new Schema(
             required: true,
         },
         coverImage: {
-            type: String
+            type: String,
         },
         watchHistory: [
             {
@@ -43,53 +42,48 @@ const userSchema = new Schema(
         ],
         password: {
             type: String,
-            required: [true, "Password is required"]
+            required: [true, "Password is required"],
         },
         refreshToken: {
-            type: String
+            type: String,
         }
     },
     {
-        timestamps: true
+        timestamps: true,
     }
 );
 
+// 🔥 FIXED: Correct pre-save for Mongoose 7
+userSchema.pre("save", async function () {
+    // If password is NOT modified, skip hashing
+    if (!this.isModified("password")) return;
 
-// FIX 2: Hash password correctly
-userSchema.pre("save", async function (next) {
-    if (!this.isModified("password")) return next();
-
-    // bcrypt.hash() returns a Promise → await required
+    // Hash the password
     this.password = await bcrypt.hash(this.password, 10);
-
-    next();
 });
 
-
-// FIX 3: Typo in "password" argument + correct comparison
+// 🔥 FIXED: Correct compare method
 userSchema.methods.isPasswordCorrect = async function (password) {
-    return await bcrypt.compare(password, this.password);
+    return bcrypt.compare(password, this.password);
 };
 
-
-// FIX 4: Add "return" for jwt token
+// 🔥 FIXED: Return access token
 userSchema.methods.generateAccessToken = function () {
     return jwt.sign(
         {
             _id: this._id,
             email: this.email,
             username: this.username,
-            fullName: this.fullName
+            fullName: this.fullName,
         },
         process.env.ACCESS_TOKEN_SECRET,
         {
-            expiresIn: process.env.ACCESS_TOKEN_EXPIRY
+            expiresIn: process.env.ACCESS_TOKEN_EXPIRY,
         }
     );
 };
 
-
-// FIX 5: Add "return" for refresh token
+// 🔥 FIXED: Return refresh token
 userSchema.methods.generateRefreshToken = function () {
     return jwt.sign(
         {
@@ -97,10 +91,9 @@ userSchema.methods.generateRefreshToken = function () {
         },
         process.env.REFRESH_TOKEN_SECRET,
         {
-            expiresIn: process.env.REFRESH_TOKEN_EXPIRY
+            expiresIn: process.env.REFRESH_TOKEN_EXPIRY,
         }
     );
 };
-
 
 export const User = mongoose.model("User", userSchema);
