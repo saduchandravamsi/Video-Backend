@@ -1,6 +1,10 @@
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
+
+// FIX 1: Extract Schema from mongoose
+const { Schema } = mongoose;
+
 const userSchema = new Schema(
     {
         username: {
@@ -25,7 +29,7 @@ const userSchema = new Schema(
             index: true
         },
         avatar: {
-            type: String, //cloudinary url
+            type: String, // Cloudinary URL
             required: true,
         },
         coverImage: {
@@ -39,7 +43,7 @@ const userSchema = new Schema(
         ],
         password: {
             type: String,
-            required: [true, 'Password is required']
+            required: [true, "Password is required"]
         },
         refreshToken: {
             type: String
@@ -47,34 +51,47 @@ const userSchema = new Schema(
     },
     {
         timestamps: true
-    })
+    }
+);
 
+
+// FIX 2: Hash password correctly
 userSchema.pre("save", async function (next) {
-    if (!this.isModified("password")) return next()
-    this.password = bcrypt.hash(this.password, 10)
-    next()
-})
+    if (!this.isModified("password")) return next();
 
-userSchema.methods.isPasswordCorrect = async function (passowrd) {
-    return await bcrypt.compare(password, this.password)
-}
+    // bcrypt.hash() returns a Promise → await required
+    this.password = await bcrypt.hash(this.password, 10);
+
+    next();
+});
+
+
+// FIX 3: Typo in "password" argument + correct comparison
+userSchema.methods.isPasswordCorrect = async function (password) {
+    return await bcrypt.compare(password, this.password);
+};
+
+
+// FIX 4: Add "return" for jwt token
 userSchema.methods.generateAccessToken = function () {
-    jwt.sign(
+    return jwt.sign(
         {
             _id: this._id,
             email: this.email,
             username: this.username,
             fullName: this.fullName
         },
-        process.env.ACCES_TOKEN_SECRET,
+        process.env.ACCESS_TOKEN_SECRET,
         {
             expiresIn: process.env.ACCESS_TOKEN_EXPIRY
         }
-    )
+    );
+};
 
-}
-userSchema.methods.refreshAccessToken = function () {
-    jwt.sign(
+
+// FIX 5: Add "return" for refresh token
+userSchema.methods.generateRefreshToken = function () {
+    return jwt.sign(
         {
             _id: this._id,
         },
@@ -82,8 +99,8 @@ userSchema.methods.refreshAccessToken = function () {
         {
             expiresIn: process.env.REFRESH_TOKEN_EXPIRY
         }
-    )
+    );
+};
 
-}
-export const User = mongoose.model("User", userSchema)
 
+export const User = mongoose.model("User", userSchema);
