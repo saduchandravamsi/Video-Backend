@@ -381,6 +381,61 @@ const getUserChannerProfile = asyncHandler(async (req, res) => {
             new ApiResponse(200, channel[0], "User channel fetched sucessfully")
         )
 })
+const getUserHistory = asyncHandler(async (req, res) => {
+    const user = await User.aggregrate([
+        {
+            $match: {
+                _id: new mongoose.Types.ObjectId(req.user._id)
+            }
+        },
+        {
+            $loockup: {
+                from: "videos",
+                localField: "watchHistory",
+                foreignFiled: "_id",
+                as: "watchHistory",
+                pipeline: [
+                    {
+                        $lookup: {
+                            from: "users",
+                            localField: "owner",
+                            foreignFiled: "_id",
+                            as: "owner",
+                            pipeline: [
+                                {
+                                    $project: {
+                                        fullName: 1,
+                                        username: 1,
+                                        avatar: 1
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        $addFields: {
+                            owner: {
+                                $first: "$owner"
+                            }
+                        }
+                    }
+
+                ]
+            }
+        }
+    ])
+
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(
+                200,
+                user[0].watchHistory,
+                "Watch history fetched sucessfulyy"
+            )
+        )
+})
+
 export {
     registerUser,
     loginUser,
@@ -390,5 +445,6 @@ export {
     getCurrentUser,
     updateAccountDetails,
     updateUserAvatar,
-    updateUserCoverImage
+    updateUserCoverImage,
+    getUserChannerProfile
 }
