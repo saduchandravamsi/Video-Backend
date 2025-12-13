@@ -20,25 +20,20 @@ router.get("/", getAllVideos);
 router.get("/:videoId", getVideoById);
 
 //protected Routes
+router.route("/").post(
+    upload.fields([
+        {
+            name: "videoFile",
+            maxCount: 1,
+        },
+        {
+            name: "thumbnail",
+            maxCount: 1,
+        },
 
-
-router
-    .route("/")
-    .get(getAllVideos)
-    .post(
-        upload.fields([
-            {
-                name: "videoFile",
-                maxCount: 1,
-            },
-            {
-                name: "thumbnail",
-                maxCount: 1,
-            },
-
-        ]),
-        publishAVideo
-    );
+    ]),
+    publishAVideo
+);
 // Update video
 router.patch(
     "/:videoId",
