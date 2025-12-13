@@ -5,7 +5,7 @@
 // add a video to the playlist
 // update playlist
 //delete video from playlist
-import mongoose, { isValidObject } from "mongoose";
+import mongoose, { isValidObjectId } from "mongoose";
 import { Playlist } from "../models/playlist.model.js";
 import { ApiError } from "../utils/ApiErrors.js";
 import { ApiResponse } from "../utils/ApiResponse.js";

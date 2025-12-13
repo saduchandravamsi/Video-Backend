@@ -2,7 +2,7 @@ import { Router } from "express";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
 import {
-    createPlaylist,
+    createPlayList,
     getUserPlaylists,
     getPlaylistById,
     addVideoToPlaylist,
@@ -18,7 +18,7 @@ router.use(verifyJWT);
 
 // Create playlist
 router.route("/")
-    .post(createPlaylist);
+    .post(createPlayList);
 
 // Get all playlists of a user
 router.route("/user/:userId")

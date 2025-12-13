@@ -1,8 +1,8 @@
-import { router } from 'express';
+import { Router } from "express";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.middleware.js"
 import {
-    publishAVideo,
+    publishVideo,
     getAllVideos,
     getVideoById,
     updateVideo,
@@ -20,20 +20,22 @@ router.get("/", getAllVideos);
 router.get("/:videoId", getVideoById);
 
 //protected Routes
-router.route("/").post(
-    upload.fields([
-        {
-            name: "videoFile",
-            maxCount: 1,
-        },
-        {
-            name: "thumbnail",
-            maxCount: 1,
-        },
+router.route("/")
+    .get(getAllVideos)
+    .post(
+        upload.fields([
+            {
+                name: "videoFile",
+                maxCount: 1,
+            },
+            {
+                name: "thumbnail",
+                maxCount: 1,
+            },
 
-    ]),
-    publishAVideo
-);
+        ]),
+        publishVideo
+    );
 // Update video
 router.patch(
     "/:videoId",

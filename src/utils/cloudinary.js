@@ -10,31 +10,45 @@ cloudinary.config({
     api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
+/**
+ * Upload file to Cloudinary
+ */
 export const uploadOnCloudinary = async (localFilePath) => {
     try {
-        if (!localFilePath) {
-            console.log("No file path provided to Cloudinary uploader.");
-            return null;
-        }
+        if (!localFilePath) return null;
 
-        // Upload file to cloudinary
         const response = await cloudinary.uploader.upload(localFilePath, {
             resource_type: "auto"
         });
 
-        // Remove local file
-        fs.unlinkSync(localFilePath);
-
+        fs.unlinkSync(localFilePath); // remove local file
         return response;
 
     } catch (error) {
-        console.error("Cloudinary upload error:", error);
+        console.log("Cloudinary upload error:", error);
 
-        // Try to remove local file even on error
-        try {
-            fs.unlinkSync(localFilePath);
-        } catch (err) { }
-
+        try { fs.unlinkSync(localFilePath); } catch (err) { }
         return null;
+    }
+};
+
+
+/**
+ * Delete file from Cloudinary
+ * @param {string} publicId - Cloudinary public ID to delete
+ * @param {string} resourceType - "image" | "video" | "raw"
+ */
+export const deleteFromCloudinary = async (publicId, resourceType = "auto") => {
+    try {
+        if (!publicId) return false;
+
+        const result = await cloudinary.uploader.destroy(publicId, {
+            resource_type: resourceType
+        });
+
+        return result;
+    } catch (error) {
+        console.log("Cloudinary delete error:", error);
+        return false;
     }
 };

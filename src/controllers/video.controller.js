@@ -1,8 +1,4 @@
-import mongoose from "mongoose";
-import { ApiError } from "../utils/ApiErrors";
-import { ApiResponse } from "../utils/ApiResponse";
-import { asyncHandler } from "../utils/asyncHandler";
-import { uploadOnCloudinary } from "../utils/cloudinary";
+
 
 //get all the videos
 /*
@@ -13,7 +9,7 @@ we will define the pagination parameter
    next 10 video will be seen using offset and limit ,every id is stored in b+tree, 
    (!Now a days using cusour based pagination ,  it will store the last id of the current page , and using B+ tree i will search the next id and instead of search id from starting , we will store it and we will search it using tree traverse)
 }
-*/
+
 const getAllVideos = asyncHandler(async (req, res) => {
     const {
         limit = 10,
@@ -76,16 +72,18 @@ const getAllVideos = asyncHandler(async (req, res) => {
  * if video not available throw error
  * get the duration of the video using cloudinary return path and data
  * post in the Database Video model
-*/
+
 const publishVideo = asyncHandler(async (req, res) => {
     const { title, description } = req.body;
     if ([title, description].some((field) => field?.trim() === "")) {
         throw new ApiError(400, "Title and description are required");
     }
-    const videoFilePath = req.files?.video?.[0]?.path;
+    const videoFilePath = req.files?.videoFile?.[0]?.path;
     if (!videoFilePath) {
         throw new ApiError(400, "Video file is required");
     }
+
+
     const videoFile = await uploadOnCloudinary(videoFilePath);
     if (!videoFile || !videoFile.url) {
         throw new ApiError(500, "Error uploading video");
@@ -287,3 +285,261 @@ export {
     togglePublishStatus,
     getVideoById
 }
+*/
+
+
+import mongoose, { isValidObjectId } from "mongoose";
+import { Video } from "../models/video.model.js";
+import { User } from "../models/user.model.js";
+import { Comment } from "../models/comment.model.js";
+import { Like } from "../models/like.model.js";
+import { Playlist } from "../models/playlist.model.js";
+
+import { ApiError } from "../utils/ApiErrors.js";
+import { ApiResponse } from "../utils/ApiResponse.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+
+import { uploadOnCloudinary, deleteFromCloudinary } from "../utils/cloudinary.js";
+
+
+// =========================
+//  GET ALL VIDEOS (CURSOR PAGINATION)
+// =========================
+const getAllVideos = asyncHandler(async (req, res) => {
+    const {
+        limit = 10,
+        cursor,
+        query,
+        sortBy = "_id",
+        sortType = "asc",
+        userId
+    } = req.query;
+
+    const limitNumber = Number(limit);
+    const filter = {};
+
+    if (query) {
+        filter.$or = [
+            { title: { $regex: query, $options: "i" } },
+            { description: { $regex: query, $options: "i" } }
+        ];
+    }
+
+    if (userId) {
+        filter.owner = userId;
+    }
+
+    if (cursor) {
+        filter._id = { $gt: cursor };
+    }
+
+    const sortOption = {};
+    sortOption[sortBy] = sortType === "asc" ? 1 : -1;
+
+    const videos = await Video.find(filter)
+        .sort(sortOption)
+        .limit(limitNumber)
+        .populate("owner", "fullName username avatar")
+        .select("-__v");
+
+    const nextCursor = videos.length > 0 ? videos[videos.length - 1]._id : null;
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            { videos, nextCursor, hasNextPage: !!nextCursor },
+            "Videos fetched successfully"
+        )
+    );
+});
+
+
+// =========================
+//  PUBLISH VIDEO
+// =========================
+const publishVideo = asyncHandler(async (req, res) => {
+    const { title, description } = req.body;
+
+    if ([title, description].some((f) => f?.trim() === "")) {
+        throw new ApiError(400, "Title and description are required");
+    }
+
+    const videoFilePath = req.files?.videoFile?.[0]?.path;
+    if (!videoFilePath) {
+        throw new ApiError(400, "Video file is required");
+    }
+
+    const videoFile = await uploadOnCloudinary(videoFilePath);
+    if (!videoFile?.url) {
+        throw new ApiError(500, "Error uploading video");
+    }
+
+    const thumbnailPath = req.files?.thumbnail?.[0]?.path;
+    let thumbnailUrl = "";
+
+    if (thumbnailPath) {
+        const thumbnail = await uploadOnCloudinary(thumbnailPath);
+        thumbnailUrl = thumbnail?.url || "";
+    }
+
+    const createdVideo = await Video.create({
+        title,
+        description,
+        videoFile: videoFile.url,
+        videoFilePublicId: videoFile.public_id,
+        thumbnail: thumbnailUrl,
+        thumbnailPublicId: thumbnailUrl ? videoFile.public_id : "",
+        duration: videoFile?.duration || 0,
+        owner: req.user._id
+    });
+
+    return res.status(201).json(
+        new ApiResponse(200, createdVideo, "Video published successfully")
+    );
+});
+
+
+// =========================
+//  UPDATE VIDEO
+// =========================
+const updateVideo = asyncHandler(async (req, res) => {
+    const { updatedTitle, updatedDescription } = req.body;
+
+    if (!updatedTitle && !updatedDescription && !req.file?.path) {
+        throw new ApiError(400, "Nothing to update");
+    }
+
+    const videoId = req.params.videoId;
+    if (!isValidObjectId(videoId)) {
+        throw new ApiError(400, "Invalid video ID");
+    }
+
+    let thumbnailUrl = "";
+    if (req.file?.path) {
+        const thumbnail = await uploadOnCloudinary(req.file.path);
+        if (!thumbnail?.url) {
+            throw new ApiError(400, "Error uploading thumbnail");
+        }
+        thumbnailUrl = thumbnail.url;
+    }
+
+    const updateData = {};
+    if (updatedTitle) updateData.title = updatedTitle;
+    if (updatedDescription) updateData.description = updatedDescription;
+    if (thumbnailUrl) updateData.thumbnail = thumbnailUrl;
+
+    const video = await Video.findByIdAndUpdate(
+        videoId,
+        { $set: updateData },
+        { new: true }
+    );
+
+    if (!video) {
+        throw new ApiError(404, "Video not found");
+    }
+
+    return res.status(200).json(
+        new ApiResponse(200, video, "Video updated successfully")
+    );
+});
+
+
+// =========================
+//  DELETE VIDEO + CASCADE
+// =========================
+const deleteVideo = asyncHandler(async (req, res) => {
+    const videoId = req.params.videoId;
+
+    if (!isValidObjectId(videoId)) {
+        throw new ApiError(400, "Invalid video ID");
+    }
+
+    const video = await Video.findById(videoId);
+    if (!video) throw new ApiError(404, "Video not found");
+
+    if (video.owner.toString() !== req.user._id.toString()) {
+        throw new ApiError(403, "Not authorized to delete this video");
+    }
+
+    if (video.thumbnailPublicId) {
+        await deleteFromCloudinary(video.thumbnailPublicId);
+    }
+
+    if (video.videoFilePublicId) {
+        await deleteFromCloudinary(video.videoFilePublicId);
+    }
+
+    await Like.deleteMany({ video: videoId });
+    await Comment.deleteMany({ video: videoId });
+    await Playlist.updateMany({}, { $pull: { videos: videoId } });
+    await User.updateMany({}, { $pull: { watchHistory: videoId } });
+
+    await Video.findByIdAndDelete(videoId);
+
+    return res.status(200).json(
+        new ApiResponse(200, {}, "Video and related data deleted successfully")
+    );
+});
+
+
+// =========================
+//  TOGGLE PUBLISH STATUS
+// =========================
+const togglePublishStatus = asyncHandler(async (req, res) => {
+    const videoId = req.params.videoId;
+
+    if (!isValidObjectId(videoId))
+        throw new ApiError(400, "Invalid video ID");
+
+    const video = await Video.findById(videoId);
+    if (!video) throw new ApiError(404, "Video not found");
+
+    if (video.owner.toString() !== req.user._id.toString()) {
+        throw new ApiError(403, "You cannot modify this video");
+    }
+
+    video.isPublished = !video.isPublished;
+    await video.save({ validateBeforeSave: false });
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            { isPublished: video.isPublished },
+            `Video ${video.isPublished ? "published" : "unpublished"} successfully`
+        )
+    );
+});
+
+
+// =========================
+//  GET VIDEO BY ID + INCREASE VIEWS
+// =========================
+const getVideoById = asyncHandler(async (req, res) => {
+    const videoId = req.params.videoId;
+
+    if (!isValidObjectId(videoId)) {
+        throw new ApiError(400, "Invalid video ID");
+    }
+
+    const video = await Video.findById(videoId)
+        .populate("owner", "fullName username avatar");
+
+    if (!video) throw new ApiError(404, "Video not found");
+
+    video.views = (video.views || 0) + 1;
+    await video.save({ validateBeforeSave: false });
+
+    return res.status(200).json(
+        new ApiResponse(200, video, "Video fetched successfully")
+    );
+});
+
+
+export {
+    getAllVideos,
+    publishVideo,
+    updateVideo,
+    deleteVideo,
+    togglePublishStatus,
+    getVideoById
+};
