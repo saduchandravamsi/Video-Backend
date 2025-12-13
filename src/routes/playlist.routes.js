@@ -13,9 +13,7 @@ import {
 
 const router = Router();
 
-/* -----------------------------
-   PROTECTED ROUTES ONLY
---------------------------------*/
+/* PROTECTED ROUTES ONLY*/
 router.use(verifyJWT);
 
 // Create playlist
