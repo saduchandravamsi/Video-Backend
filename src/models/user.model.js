@@ -1,9 +1,7 @@
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
-
 const { Schema } = mongoose;
-
 const userSchema = new Schema(
     {
         username: {
@@ -52,22 +50,15 @@ const userSchema = new Schema(
         timestamps: true,
     }
 );
-
-// 🔥 FIXED: Correct pre-save for Mongoose 7
 userSchema.pre("save", async function () {
     // If password is NOT modified, skip hashing
     if (!this.isModified("password")) return;
-
     // Hash the password
     this.password = await bcrypt.hash(this.password, 10);
 });
-
-// 🔥 FIXED: Correct compare method
 userSchema.methods.isPasswordCorrect = async function (password) {
     return bcrypt.compare(password, this.password);
 };
-
-// 🔥 FIXED: Return access token
 userSchema.methods.generateAccessToken = function () {
     return jwt.sign(
         {
@@ -82,8 +73,6 @@ userSchema.methods.generateAccessToken = function () {
         }
     );
 };
-
-// 🔥 FIXED: Return refresh token
 userSchema.methods.generateRefreshToken = function () {
     return jwt.sign(
         {
@@ -95,5 +84,4 @@ userSchema.methods.generateRefreshToken = function () {
         }
     );
 };
-
 export const User = mongoose.model("User", userSchema);
